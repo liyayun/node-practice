@@ -5,56 +5,96 @@ var cheerio = require('cheerio');
 var eventproxy = require('eventproxy');
 
 var app = express();
-var cnodeUrl = 'https://cnodejs.org/';
+var baseUrl = 'http://www.qiubai.com/';
 
-app.get('/', function (req, res, next) {
-  // 用 superagent 去抓取 https://cnodejs.org/ 的内容
-  superagent.get(cnodeUrl)
-    .end(function (err, sres) {
-      // 常规的错误处理
-      if (err) {
-        return console.log(err);
-      }
-      // sres.text 里面存储着网页的 html 内容，将它传给 cheerio.load 之后
-      // 就可以得到一个实现了 jquery 接口的变量，我们习惯性地将它命名为 `$`
-      // 剩下就都是 jquery 的内容了
-      var $ = cheerio.load(sres.text);
-      var topicUrls = [];
-      $('#topic_list .topic_title').each(function (idx, element) {
-        var $element = $(element);
-        var href = url.resolve(cnodeUrl, $element.attr('href'));
-        topicUrls.push(href);
+function fullUrl(baseUrl, page)
+{
+  var path = 'index-'+ page + '.html';
+  return url.resolve(baseUrl, path);
+}
+
+function fetchData(page, hres, allTopics, count)
+{
+  allTopics = allTopics || [];
+  page = page || 1;
+
+  console.log(page);
+  superagent.get(fullUrl(baseUrl, page))
+      .end(function(err, res)
+      {
+          if(err)
+          {
+              return console.log(err);
+          }
+
+          var $ = cheerio.load(res.text);
+
+          count = count || countPage($);
+
+          var topics = getTopics($);
+          allTopics = allTopics.concat(topics);  
+
+          if( page < count )
+          {
+            fetchData(++page, hres, allTopics, count);
+          } else
+          {
+             console.log(allTopics.length);
+             hres.send({count: allTopics.length, topics: allTopics}); 
+          }
       });
+}
 
-      var ep = new eventproxy();
-      ep.after('fetchedDataSuccess', topicUrls.length, function (topics) {
-        topics = topics.map(function (topicPair) {
-          var topicUrl = topicPair[0];
-          var topicHtml = topicPair[1];
-          var $ = cheerio.load(topicHtml);
-            return ({
-              title: $('.topic_full_title').text().trim(),
-              href: topicUrl,
-              comment1: $('.reply_content').eq(0).text().trim()
-            });
-          });
-        console.log('data:');
-        console.log(topics);
-        res.send(topics);
-      });
+function getTopics($){
+  var topics = [];
+  $('.content-block .block').each(function(index, element){
+    var topic = {};
+    var $element = $(element);
 
-      topicUrls.forEach(function(topicUrl){
-        superagent.get(topicUrl)
-        .end(function(err,  res){
-            console.log('fetch ' + topicUrl + ' successful');
-            ep.emit('fetchedDataSuccess', [topicUrl, res.text]);
-        });
-      });
+    var authorEle = $element.find('.author');
+    var title = authorEle.children().eq(0).children().eq(0).text();
+    topic.title = title;
 
-    });
+    var contentEle = $element.find('.content');
+    var content = contentEle.children('p').eq(0).text();
+    topic.content = content;
+
+    var hasThumb = contentEle.next().hasClass('thumb');
+    if(hasThumb)
+    {
+      var image = contentEle.next().find('a').eq(0).attr('href');
+      topic.image = image;
+    }
+
+    topics.push(topic);
+  });
+  return topics;
+}
+
+function countPage($){
+  var pbEle = $('.pagebar').eq(0);
+  var aEles = pbEle.find('a');
+  var lastAE = aEles.eq(aEles.length - 1);
+  return lastAE.attr('href').split('-')[1].split('.')[0];
+}
+
+
+app.get('/', function(req, res) {
+  var ip = req.ip;
+  var allTopics = [];
+  var page = 1;
+  var count;
+  
+  console.log('来自' + ip + '的请求');
+  fetchData(page, res, allTopics, count);
 });
 
-app.listen(3000, function(req, res){
-	console.log('listen on 3000 port.');
+
+app.listen(3000, function(req, res)
+{
+ console.log('listen on 3000 port.');
 });
+
+
+
 

@@ -12,7 +12,7 @@ var count;
 
 function fullUrls(pages)
 {
-  
+
   var urls = [];
   for (var i = 1; i <= pages; i++) {
     var path = 'index-'+ i + '.html';
@@ -20,7 +20,7 @@ function fullUrls(pages)
     urls.push(pageUrl);       
   };
 
-  conosle.log(urls);
+  return urls;
 }
 
 
@@ -91,7 +91,7 @@ function fetchData(url, callback)
     count = count || countPage($);
 
     var topics = getTopics($);  
-    callback(null, url);  
+    callback(null, topics);  
  });
 }
 
@@ -100,21 +100,18 @@ function fetchData(url, callback)
 
 app.get('/', function(req, res) {
   var ip = req.ip;
-  var allTopics = [];
   var page = 1;
-  
   console.log('来自' + ip + '的请求');
 
   countPage(page).then(function(result){
     var urls = fullUrls(result); 
-    console.log(urls);
+    // console.log(urls);
 
     // var urls = ['http://www.qiubai.com/index-1.html', 'http://www.qiubai.com/index-2.html','http://www.qiubai.com/index-3.html'];
-    async.mapLimit(urls, 2, function (url, callback) {
+    async.mapLimit(urls, 20, function (url, callback) {
       fetchData(url, callback);
     }, function (err, data) {
-      console.log('final:');
-      console.log(data);
+      console.log('final');
       res.send(data);
     });
 
@@ -122,7 +119,6 @@ app.get('/', function(req, res) {
     console.log(err);
   });
 
-  // fetchData(page, res, allTopics);
 });
 
 

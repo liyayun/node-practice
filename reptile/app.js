@@ -10,43 +10,20 @@ var app = express();
 var baseUrl = 'http://www.qiubai.com/';
 var count;
 
-function fullUrl(baseUrl, page)
+function fullUrls(pages)
 {
-  var path = 'index-'+ page + '.html';
-  return url.resolve(baseUrl, path);
-}
-
-function fetchData(page, hres, allTopics)
-{
-  allTopics = allTopics || [];
-  page = page || 1;
   
-  var url = fullUrl(baseUrl, page);
-  console.log(url);
-  superagent.get(url)
-      .end(function(err, res)
-      {
-          if(err)
-          {
-              return console.log(err);
-          }
+  var urls = [];
+  for (var i = 1; i <= pages; i++) {
+    var path = 'index-'+ i + '.html';
+    var pageUrl = url.resolve(baseUrl, path);
+    urls.push(pageUrl);       
+  };
 
-          var $ = cheerio.load(res.text);
-
-          count = count || countPage($);
-
-          var topics = getTopics($);
-          allTopics = allTopics.concat(topics);  
-
-          if( page < count )
-          {
-            fetchData(++page, hres, allTopics);
-          }else{
-             console.log(allTopics.length);
-             hres.send({count: allTopics.length, topics: allTopics}); 
-          }
-      });
+  conosle.log(urls);
 }
+
+
 
 function getTopics($){
   var topics = [];
@@ -74,29 +51,51 @@ function getTopics($){
   return topics;
 }
 
+
+
 function countPage(page){
-  var url = fullUrl(baseUrl, page);
   
   return new Promise(function (resolve, reject) {
+   superagent.get(baseUrl)
+   .end(function(err, res){
+    if(err)
+    {
+      reject(err);
+    }
 
-     superagent.get(url)
-        .end(function(err, res){
-          if(err)
-          {
-            reject(err);
-          }
+    var $ = cheerio.load(res.text);
 
-          var $ = cheerio.load(res.text);
+    var pbEle = $('.pagebar').eq(0);
+    var aEles = pbEle.find('a');
+    var lastAE = aEles.eq(aEles.length - 1);
+    var count = lastAE.attr('href').split('-')[1].split('.')[0];
 
-          var pbEle = $('.pagebar').eq(0);
-          var aEles = pbEle.find('a');
-          var lastAE = aEles.eq(aEles.length - 1);
-          var count = lastAE.attr('href').split('-')[1].split('.')[0];
-
-          resolve(count);
-        });
+    resolve(count);
   });
+ });
 }
+
+
+function fetchData(url, callback)
+{
+  superagent.get(url)
+  .end(function(err, res)
+  {
+    if(err)
+    {
+      return console.log(err);
+    }
+
+    console.log('正在获取',url, '页面的数据...');
+    var $ = cheerio.load(res.text);
+    count = count || countPage($);
+
+    var topics = getTopics($);  
+    callback(null, url);  
+ });
+}
+
+
 
 
 app.get('/', function(req, res) {
@@ -107,7 +106,18 @@ app.get('/', function(req, res) {
   console.log('来自' + ip + '的请求');
 
   countPage(page).then(function(result){
-    console.log(result);
+    var urls = fullUrls(result); 
+    console.log(urls);
+
+    // var urls = ['http://www.qiubai.com/index-1.html', 'http://www.qiubai.com/index-2.html','http://www.qiubai.com/index-3.html'];
+    async.mapLimit(urls, 2, function (url, callback) {
+      fetchData(url, callback);
+    }, function (err, data) {
+      console.log('final:');
+      console.log(data);
+      res.send(data);
+    });
+
   }, function(err){
     console.log(err);
   });

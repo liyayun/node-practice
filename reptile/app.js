@@ -8,11 +8,9 @@ var Promise = require('promise');
 
 var app = express();
 var baseUrl = 'http://www.qiubai.com/';
-var count;
 
 function fullUrls(pages)
 {
-
   var urls = [];
   for (var i = 1; i <= pages; i++) {
     var path = 'index-'+ i + '.html';
@@ -53,24 +51,30 @@ function getTopics($){
 
 
 
-function countPage(page){
-  
+function countPage(){
   return new Promise(function (resolve, reject) {
    superagent.get(baseUrl)
    .end(function(err, res){
     if(err)
     {
       reject(err);
+      return;
     }
 
     var $ = cheerio.load(res.text);
 
-    var pbEle = $('.pagebar').eq(0);
-    var aEles = pbEle.find('a');
-    var lastAE = aEles.eq(aEles.length - 1);
-    var count = lastAE.attr('href').split('-')[1].split('.')[0];
+    try{
+      var pbEle = $('.pagebar').eq(0);
+      var aEles = pbEle.find('a');
+      var lastAE = aEles.eq(aEles.length - 1);
+      var count = lastAE.attr('href').split('-')[1].split('.')[0];
+    }catch(exception){
+      reject(exception);
+      return;
+    }
 
     resolve(count);
+    return;
   });
  });
 }
@@ -88,7 +92,6 @@ function fetchData(url, callback)
 
     console.log('正在获取',url, '页面的数据...');
     var $ = cheerio.load(res.text);
-    count = count || countPage($);
 
     var topics = getTopics($);  
     callback(null, topics);  
@@ -100,19 +103,24 @@ function fetchData(url, callback)
 
 app.get('/', function(req, res) {
   var ip = req.ip;
-  var page = 1;
   console.log('来自' + ip + '的请求');
 
-  countPage(page).then(function(result){
+  countPage().then(function(result){
     var urls = fullUrls(result); 
-    // console.log(urls);
+    var topics = [];
 
-    // var urls = ['http://www.qiubai.com/index-1.html', 'http://www.qiubai.com/index-2.html','http://www.qiubai.com/index-3.html'];
-    async.mapLimit(urls, 20, function (url, callback) {
+    async.mapLimit(urls, 10, function (url, callback) {
       fetchData(url, callback);
     }, function (err, data) {
       console.log('final');
-      res.send(data);
+      if(err){
+         return console.log(err); 
+      };
+
+      for (var i = 0; i < data.length; i++) {
+        topics = topics.concat(data[i]);
+      };
+      res.send(topics); 
     });
 
   }, function(err){

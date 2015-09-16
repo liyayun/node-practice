@@ -5,4 +5,4 @@
 描述：爬取糗百全部帖子 <br>
 第三方依赖模块： express、superagent、cheerio、async、promise
 
-## tdd: Practice to use test module.
+## tdd: 学习使用mocha,should,istanbul
